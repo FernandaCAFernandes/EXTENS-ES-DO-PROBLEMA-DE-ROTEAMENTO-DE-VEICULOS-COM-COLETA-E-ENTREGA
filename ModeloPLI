@@ -1,0 +1,98 @@
+int n = ...;
+int m = ...; 
+{int} N = { i | i in 1..n};
+{int} N0 = {0} union N; 
+{int} V = { i | i in 1..m}; 
+float Q[V][1..2] = ...;
+float T[V] = ...; 
+float F[V] = ...; 
+float v[V] = ...; 
+
+tuple Arco {   
+       int origem;
+       int destino;
+} 
+{Arco} arcos = {<i, j> | i in N0, j in N0 : i != j}; 
+
+float c[arcos] = ...;
+float t[arcos] = ...;
+
+float tD[N0] = ...;
+float tC[N0] = ...;
+
+
+float d[N][1..2] = ...;
+float p[N][1..2] = ...; 
+ 
+
+dvar boolean x[arcos][V];
+dvar float+ y[arcos][V][1..2]; 
+dvar float+ z[arcos][V][1..2];
+
+minimize
+       sum(k in V, j in N) F[k] * x[<0, j>][k] + sum(k in V, i in N0, j in N0 : i!= j) v[k] * c[<i ,j>] * x[<i, j>][k];        
+         
+
+subject to {   
+       forall(j in N) {
+           sum(k in V, i in N0 : i != j) x[<i, j>][k] == 1;
+       }
+       forall(p in N0){
+       		forall(k in V){
+       		    sum(i in N0 : i != p)  x[<i, p>][k] - sum(j in N0 :j != p )x[<p, j>][k] == 0;  		
+       		}
+       }
+       forall(k in V){
+       		sum(j in N) x[<0 ,j>][k] <= 1;  
+       }
+       forall(i in N, k in V, l in 1..2){
+       		loadPickUpSetZero:    
+       			y[<0, i>][k][l] == 0; 
+       }
+       forall(i in N, k in V, l in 1..2){
+       		LoadDeliverySetZero:        
+       			z[<i, 0>][k][l] == 0;       
+       }
+       forall(j in N, l in 1..2){
+       		sum(i in N0, k in V : i != j) y[<j, i>][k][l] - sum(i in N0, k in V : i != j) y[<i, j>][k][l] == p[j][l];  
+       }
+       forall(j in N, l in 1..2){
+       		sum(i in N0, k in V : i != j) z[<i, j>][k][l] - sum(i in N0, k in V: i != j) z[<j, i>][k][l] == d[j][l];       		   		
+       } 
+       forall(l in 1..2){
+              sum(i in N, k in V) y[<i, 0>][k][l] == sum (i in N) p[i][l]; 
+       }
+        forall(l in 1..2){
+            sum(i in  N, k in V) z[<0, i>][k][l] == sum(i in N) d[i][l];    
+        }
+       forall(a in arcos, k in V, l in 1..2){
+               y[a][k][l] + z[a][k][l] <= Q[k][l] * x[a][k];
+       }
+       forall (k in V){
+       		sum (i in N0, j in N0 : i !=j)  (t[<i,j>] + tC[j] + tD[j]) * x[<i,j>][k] <= T[k]  ;    
+       }       
+              
+}
+
+{Arco} viagem[k in V] = {a | a in arcos : x[a][k] == 1};
+
+float cV = 0.0;
+float tV = 0.0;
+execute{
+var ofile = new IloOplOutputFile("PRsScriptLog.txt");
+	for (var k in V) {
+		ofile.writeln("veículo: ", k);		
+		for (var a in viagem[k]) {
+			ofile.writeln(a.origem, "\t", a.destino, "\t", " / cV: ", v[k]*c[a], "\t", "tV: ", t[a] + tC[a.destino] + tD[a.destino]);
+			cV = cV + v[k] * c[a];		
+			tV = tV + t[a] + tC[a.destino] + tD[a.destino];	
+
+		}
+		ofile.writeln ("cVTotal =", "\t", cV, "\t" , "/ cFTotal= ", F[k], "\t", "tVTotal = ", tV);
+		cV = 0;
+		tV = 0;			
+			
+	}
+
+}
+
