@@ -1,0 +1,632 @@
+public class ArraysTxt {
+	int[] nodes;
+	double[] di;
+	double[] pi;
+	double[] x;
+	double[] y;
+	double[] vehT;
+	double[] vehC;
+	double[] vCost;
+	double[] fCost;
+	double[] vHours;
+
+	public ArraysTxt(int[] nodes, double[] di, double[] pi, double[] x, double[] y, double[] vehT, double[] vehC,
+			double[] vCost, double[] fCost, double[] vHours) {
+
+		this.nodes = nodes;
+		this.di = di;
+		this.pi = pi;
+		this.x = x;
+		this.y = y;
+		this.vehT = vehT;
+		this.vehC = vehC;
+		this.vCost = vCost;
+		this.fCost = fCost;
+		this.vHours = vHours;
+	}
+	
+}
+
+import java.io.FileNotFoundException;
+import java.text.DecimalFormat;
+import java.util.Locale;
+import java.util.Random;
+
+public class Main {
+
+	public static void main(String[] args) throws FileNotFoundException {
+		Locale.setDefault(Locale.US);
+
+		// Leitura dos dados do Txt e organização desses dados em Arrays.
+		ReadTxt rTxt = new ReadTxt("Inputs.txt");
+		ArraysTxt txt = rTxt.readFile();
+
+		// Chamar metodos para realizar os Calculos/Logica e
+		// Por fim chamar apenas um metodo para realizar o print
+		// para que ele fique organizado.
+
+		// Variaveis para armazenar dados derivados do problema
+		double[][] distance = calculateDistance(txt.x, txt.y);
+		double[][] dTravelTime = calculateDistanceTime(distance, txt.nodes);
+
+		double[] deliveryTimePerClient = deliveryLoadTime(txt.di);
+		double[] pickupTimePerClient = pickUpLoadTime(txt.pi);
+
+		int[] amountOfVehPerType = calculateAmountOfVeh(txt.vehT, txt.vehC, txt.nodes, txt.di, txt.pi,
+				deliveryTimePerClient, pickupTimePerClient, dTravelTime, txt.vHours, txt.fCost, txt.vCost);
+
+		print(txt.nodes, amountOfVehPerType, txt.vehC, txt.fCost, txt.vCost, txt.di, deliveryTimePerClient, txt.pi,
+				pickupTimePerClient, distance, dTravelTime, txt.vHours);
+
+	}
+
+	public static double[][] calculateDistance(double[] x, double[] y) {
+		double[][] d = new double[x.length][y.length];
+
+		for (int i = 0; i < x.length; i++) {
+			for (int j = 0; j < y.length; j++) {
+				if (i == j) {
+					d[i][j] = 0;
+				} else {
+					d[i][j] = Math.sqrt(Math.pow((x[j] - x[i]), 2) + Math.pow((y[j] - y[i]), 2));
+				}
+			}
+		}
+		return d;
+
+	}
+
+	public static double[][] calculateDistanceTime(double[][] d, int[] nodes) {
+		double[][] t = new double[nodes.length][nodes.length];
+		Random r = new Random();
+
+		for (int i = 0; i < nodes.length; i++) {
+			for (int j = 0; j < nodes.length; j++) {
+				t[i][j] = (20 * d[i][j]) / 100;
+				t[i][j] = calculateTime(r, d[i][j], t[i][j]);
+			}
+		}
+
+		return t;
+	}
+
+	public static double[] deliveryLoadTime(double[] di) {
+		double[] deliveryLoadT = new double[di.length / 2];
+
+		int index = 0;
+		Random r = new Random();
+		for (int i = 0; i < deliveryLoadT.length; i++) {
+			
+			deliveryLoadT[i] = 20 * (di[index] + di[index + 1]) / 100;
+			deliveryLoadT[i] = calculateTime(r, di[index] + di[index + 1], deliveryLoadT[i]);
+			index += 2;
+
+		}
+		return deliveryLoadT;
+	}
+
+	public static double[] pickUpLoadTime(double[] pi) {
+		double[] pickUpLoadT = new double[pi.length / 2];
+		
+		int index = 0;
+		Random r = new Random();
+		for (int i = 0; i < pickUpLoadT.length; i++) {
+			pickUpLoadT[i] = 20 * (pi[index] + pi[index + 1]) / 100;
+			pickUpLoadT[i] = calculateTime(r, pi[index] + pi[index + 1], pickUpLoadT[i]);
+			index+=2;
+			
+		}
+		return pickUpLoadT;
+	}
+
+	public static int[] calculateAmountOfVeh(double[] vType, double[] vCapacity, int[] nodes, double[] di,
+			double[] pi, double[] diTimer, double[] piTimer, double[][] distanceTravelTimer, double[] vHours, double[] fCost, double[] vCost) {
+		int[] amountOfVeh = new int[vType.length];
+
+		boolean[] alreadyVisited = new boolean[nodes.length];
+
+		double[] clientDelivery1stDimension = new double[di.length / 2];
+		double[] clientDelivery2ndDimension = new double[di.length / 2];
+
+		double[] clientPickUp1stDimension = new double[pi.length / 2];
+		double[] clientPickUp2ndDimension = new double[pi.length / 2];
+
+		double[] maxVehCapacity1stDimension = new double[vType.length];
+		double[] maxVehCapacity2ndDimension = new double[vType.length];
+
+		// Separar a qtde a ser entregue e recolhida por dimensao de cada cliente nos
+		// seus
+		// devidos arrays. Di e Pi possuem o msm tamanho logo n tem necessidade de fazar
+		// separado. As dimensões são por clientes e agrurpadas de dois em dois. 1st e
+		// 2nd.
+
+		// indice q vai até 5 e um que vai até 10 de 2 em 2.
+
+		int aux = 0;
+		for (int i = 0; i < di.length; i += 2) {
+			clientDelivery1stDimension[aux] = di[i];
+			clientDelivery2ndDimension[aux] = di[i + 1];
+
+			clientPickUp1stDimension[aux] = pi[i];
+			clientPickUp2ndDimension[aux] = pi[i + 1];
+			aux++;
+
+		}
+
+		int j = 0;
+		for (int i = 0; i < vType.length; i++) {
+			for (; j < vCapacity.length;) {
+				maxVehCapacity1stDimension[i] = vCapacity[j];
+				maxVehCapacity2ndDimension[i] = vCapacity[j + 1];
+				j = j + 2;
+				break;
+
+			}
+
+		}
+
+		// setar nodes como nao visitados
+		for (int i = 0; i < alreadyVisited.length; i++) {
+			alreadyVisited[i] = false;
+
+		}
+
+		for (int i = 0; i < vType.length; i++) {
+			// System.out.println("Veiculo do tipo " + i + "sendo trabalhado agora");
+			// System.out.println("Loop infinito no tipo do veiculo???");
+			// System.out.println(alreadyVisited.length);
+			int amountOfVehPerType = 0;
+			boolean typeXofVehDone = false;
+			// ter como imprimir a qtde exata de carga q o veh sai do deposito com
+			// int CapacityOfVeh1stDimension = 0;
+			// int CapacityOfVeh2ndDimension = 0;
+			
+			//double vehRemainingWorkTime = vHours[i]; // 8hrs * 60
+			
+			//variavel da tabela
+			double localVCost = 0;
+			double localFCost = 0;
+			double localTimeSpent = 0;
+			
+
+			for (int reset = 1; reset < alreadyVisited.length; reset++) {
+				alreadyVisited[reset] = false;
+			}
+
+			while (typeXofVehDone == false) {
+
+				// System.out.println("Loop infinito no while?");
+				amountOfVehPerType++;
+				
+				System.out.println("Rota do Veículo " + amountOfVehPerType + " do tipo " + (i+1) + ": ");
+				
+				localFCost += fCost[i];
+				// Carga ao sair do deposito (Caso queira imprimir x-x)
+				// double cargoLoadedOnDesposit1stDimension = 0;
+				// double cargoLoadedOnDeposit2ndDimension = 0;
+				// Carga a ser entregue transportada pelo veiculo
+				double toBeDelivered1stDimension = 0;
+				double toBeDelivered2ndDimension = 0;
+				double vehRemainingWorkTime = vHours[i];
+				double atualCapacityOfVeh1stDimension = 0;
+				double atualCapacityOfVeh2ndDimension = 0;
+				int lastClientVisited = 0;
+
+				for (int destination = 1; destination < nodes.length; destination++) {
+
+					if (alreadyVisited[destination] == false) {
+						 
+						 
+
+						if (toBeDelivered1stDimension
+								+ clientDelivery1stDimension[destination] <= maxVehCapacity1stDimension[i]
+
+								&& atualCapacityOfVeh1stDimension
+										+ clientDelivery1stDimension[destination] <= maxVehCapacity1stDimension[i]
+
+								&& atualCapacityOfVeh1stDimension
+										+ clientPickUp1stDimension[destination] <= maxVehCapacity1stDimension[i]
+
+								&& toBeDelivered2ndDimension
+										+ clientDelivery2ndDimension[destination] <= maxVehCapacity2ndDimension[i]
+
+								&& atualCapacityOfVeh2ndDimension
+										+ clientDelivery2ndDimension[destination] <= maxVehCapacity2ndDimension[i]
+
+								&& atualCapacityOfVeh2ndDimension
+										+ clientPickUp2ndDimension[destination] <= maxVehCapacity2ndDimension[i]
+
+								&& vehRemainingWorkTime - distanceTravelTimer[lastClientVisited][destination]
+										- diTimer[destination] - piTimer[destination]
+										- distanceTravelTimer[destination][0] >= 0) {
+							
+							// Qtde Ao sair do Deposito Exclusivamente.
+							toBeDelivered1stDimension += clientDelivery1stDimension[destination];
+							toBeDelivered2ndDimension += clientDelivery2ndDimension[destination];
+							// Capaciade Atual ao visitar o destino (Oq ainda tem q entregar do deposito +
+							// tudo q foi recolhido)
+							atualCapacityOfVeh1stDimension += clientPickUp1stDimension[destination];
+							atualCapacityOfVeh2ndDimension += clientPickUp2ndDimension[destination];
+							vehRemainingWorkTime = vehRemainingWorkTime
+									- distanceTravelTimer[lastClientVisited][destination] - diTimer[destination]
+									- piTimer[destination];
+							
+							
+							localVCost += vCost[i]*distanceTravelTimer[lastClientVisited][destination];
+							localTimeSpent += distanceTravelTimer[lastClientVisited][destination] + diTimer[destination] + piTimer[destination];
+							
+							
+							
+							//print da rota de cada veiculo de cada tipo
+							System.out.println(lastClientVisited + " -> " + destination);
+							
+							lastClientVisited = destination;
+							alreadyVisited[destination] = true;
+							
+							
+							
+						}
+
+					}
+
+				}
+				
+
+				amountOfVeh[i] = amountOfVehPerType;
+
+				typeXofVehDone = true;
+				
+				localVCost +=  vCost[i] * distanceTravelTimer[lastClientVisited][0];
+				localTimeSpent += distanceTravelTimer[lastClientVisited][0];
+	
+				
+				//Print do retorno ao deposito
+				System.out.println(lastClientVisited + " -> 0" );
+
+				//System.out.println("qtde de veiculos até agora: " + amountOfVehPerType);
+				for (int k = 1; k < alreadyVisited.length; k++) {
+					// System.out.println("Valor do k: " + k);
+					if (alreadyVisited[k] == true) {
+						// System.out.println("Veiculo " + amountOfVehPerType + " do tipo " + i +
+						// "visitou o cliente " + k);
+
+					} else {
+						typeXofVehDone = false;
+					}
+				}
+
+			}
+			//imprimit aqui!!!!
+			System.out.println("Rota do veiculo " + (i+1) + "\n CustoVariavelTotal = " + new DecimalFormat("##.##").format(localVCost) + "\n CustoFixoTotal = " + new DecimalFormat("##.##").format(localFCost) + "\n TempoTotalGasto = " + new DecimalFormat("##.##").format(localTimeSpent));
+
+		}
+
+		return amountOfVeh;
+
+	}
+
+	public static void print(int[] nodes, int[] amountOfVeh, double[] vehCapacity, double[] vehFCost,
+			double[] vehVCost, double[] di, double[] diTimer, double[] pi, double[] piTimer, double[][] distance,
+			double[][] distanceTravelTime, double[] vHours) {
+
+		// n = qtde de clientes
+		System.out.println("n = " + (nodes.length - 1) + ";");
+
+		// m = qtde de veiculos
+		int m = 0;
+		for (int i = 0; i < amountOfVeh.length; i++) {
+			m = m + amountOfVeh[i];
+		}
+		
+		System.out.println("m = " + m + ";");
+
+		// Capacidade do veiculo m
+		double[] vehCapacity1st = new double[vehCapacity.length / 2];
+		double[] vehCapacity2nd = new double[vehCapacity.length / 2];
+		int index1st = 0;
+		int index2nd = 0;
+
+		for (int i = 0; i < vehCapacity.length; i++) {
+			if (i % 2 == 0) {
+				vehCapacity1st[index1st] = vehCapacity[i];
+				index1st++;
+			} else {
+				vehCapacity2nd[index2nd] = vehCapacity[i];
+				index2nd++;
+			}
+		}
+
+		System.out.print("Q = [");
+		for (int i = 0; i < amountOfVeh.length; i++) {
+			for (int j = 0; j < amountOfVeh[i]; j++) {
+				System.out.print("[" + vehCapacity1st[i] + ", " + vehCapacity2nd[i] + "]");
+				if (i != amountOfVeh.length - 1 && j != amountOfVeh[i]) {
+					System.out.print(",");
+				}
+			}
+
+		}
+		System.out.print("]; \n");
+
+		// Expediente do veiculo
+		int count = 0;
+		System.out.print("T = [");
+		for (int i = 0; i < amountOfVeh.length; i++) {
+			for (int j = 0; j < amountOfVeh[i]; j++) {
+				System.out.print(vHours[i]);
+				count++;
+				if (count != m) {
+					System.out.print(" ");
+				}
+			}
+
+		}
+
+		System.out.print("]; \n");
+
+		// Custo fixo do veiculo m
+		count = 0;
+		System.out.print("F = [");
+		for (int i = 0; i < amountOfVeh.length; i++) {
+			for (int j = 0; j < amountOfVeh[i]; j++) {
+				System.out.print(vehFCost[i]);
+				count++;
+				if (count != m) {
+					System.out.print(", ");
+				}
+			}
+		}
+		System.out.print("]; \n");
+
+		// Custo variavel do veiculo m
+		count = 0;
+		System.out.print("v = [");
+		for (int i = 0; i < amountOfVeh.length; i++) {
+			for (int j = 0; j < amountOfVeh[i]; j++) {
+				System.out.print(vehVCost[i]);
+				count++;
+				if (count != m) {
+					System.out.print(", ");
+				}
+			}
+		}
+		System.out.print("]; \n");
+
+		// qtde de carga a ser entregue no cliente n
+		System.out.print("d= [");
+		for (int i = 2; i < di.length;) {
+			System.out.print("[" + new DecimalFormat("##.##").format(di[i]) + ", "
+					+ new DecimalFormat("##.##").format(di[i + 1]) + "]");
+			i += 2;
+			if (i <= di.length - 1) {
+				System.out.print(", ");
+			}
+		}
+		System.out.print("]; \n");
+
+		// Tempo para realizar o processo de entrega no cliente n
+		System.out.println("tD = [ ");
+		for (int i = 1; i < diTimer.length; i++) {
+			if (i == 1) {
+				System.out.println("0,");
+			}
+			System.out.print(new DecimalFormat("##.##").format(diTimer[i]));
+			if (i != diTimer.length - 1) {
+				System.out.print(",");
+			}
+			System.out.print("\n");
+		}
+		System.out.print("]; \n");
+
+		// Qtde de carga a ser recolhida no cliente n
+		System.out.print("p= [");
+		for (int i = 2; i < pi.length;) {
+			System.out.print("[" + new DecimalFormat("##.##").format(pi[i]) + ", "
+					+ new DecimalFormat("##.##").format(pi[i + 1]) + "]");
+			i += 2;
+			if (i <= pi.length - 1) {
+				System.out.print(", ");
+			}
+		}
+		System.out.print("]; \n");
+
+		// Tempo para realizar o processo de coleta no cliente n
+		System.out.println("tC = [ ");
+		for (int i = 1; i < piTimer.length; i++) {
+			if (i == 1) {
+				System.out.println("0,");
+			}
+			System.out.print(new DecimalFormat("##.##").format(piTimer[i]));
+			if (i != piTimer.length - 1) {
+				System.out.print(",");
+			}
+			System.out.print("\n");
+		}
+		System.out.print("]; \n");
+
+		// Distancia para percorrer o arco c
+		System.out.println("c = [ ");
+		for (int i = 0; i < distance.length; i++) {
+			for (int j = 0; j < distance.length; j++) {
+				if (i != j) {
+					if (i != distance.length - 1 || j != distance.length - 2) {
+						System.out.print(new DecimalFormat("##.##").format(distance[i][j]) + ", ");
+					} else {
+						System.out.print(new DecimalFormat("##.##").format(distance[i][j]));
+					}
+				}
+
+			}
+			System.out.print("\n");
+		}
+		System.out.print("]; \n");
+
+		// Tempo para percorrer a ditancia do arco c
+		System.out.println("t = [ ");
+		for (int i = 0; i < distanceTravelTime.length; i++) {
+			for (int j = 0; j < distanceTravelTime.length; j++) {
+				if (i != j) {
+					if (i != distanceTravelTime.length - 1 || j != distanceTravelTime.length - 2) {
+						System.out.print(new DecimalFormat("##.##").format(distanceTravelTime[i][j]) + ", ");
+					} else {
+						System.out.print(new DecimalFormat("##.##").format(distanceTravelTime[i][j]));
+					}
+				}
+
+			}
+			System.out.print("\n");
+		}
+		System.out.print("]; \n");
+
+	}
+
+	public static double calculateTime(Random r, double d, double t) {
+		switch (r.nextInt(2)) {
+		case 0:
+			return d + t;
+		case 1:
+			return d - t;
+		}
+		return 0;
+	}
+}
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.Locale;
+
+public class ReadTxt {
+	
+	private File f;
+
+	public ReadTxt(String fileTxt) {
+		f = new File(fileTxt);
+
+	}
+
+	public ArraysTxt readFile() throws FileNotFoundException {
+		Locale.setDefault(Locale.US);
+
+		FileReader fr = new FileReader(f);
+		BufferedReader br = new BufferedReader(fr);
+
+		int[] nodes = new int[1];
+
+		double[] di = new double[1];
+
+		double[] pi = new double[1];
+
+		double[] x = new double[1];
+		double[] y = new double[1];
+
+		double[] vehT = new double[1];
+		double[] vehC = new double[1];
+
+		double[] vCost = new double[1];
+		double[] fCost = new double[1];
+		
+		double[] vHours = new double[1];
+
+		String line;
+		String[] parts;
+
+		try {
+			while ((line = br.readLine()) != null) {
+
+				parts = line.split("\\s\\[|\\s|\\-|\\]");
+				if (parts[0].equals("nodes")) {
+					nodes = new int[parts.length - 1];
+					for (int i = 1; i < parts.length; i++) {
+						nodes[i - 1] = Integer.parseInt(parts[i]);
+
+					}
+
+				}
+
+				if (parts[0].equals("di")) {
+					di = new double[parts.length - 1];
+
+					for (int i = 1; i < parts.length; i++) {
+						di[i - 1] = Double.parseDouble(parts[i]);
+
+					}
+				}
+
+				if (parts[0].equals("pi")) {
+					pi = new double[parts.length - 1];
+					for (int i = 1; i < parts.length; i++) {
+						pi[i - 1] = Double.parseDouble(parts[i]);
+					}
+				}
+
+				if (parts[0].equals("xy")) {
+					x = new double[(parts.length - 1) / 2];
+					y = new double[(parts.length - 1) / 2];
+					int countX = 0;
+					int countY = 0;
+
+					for (int i = 1; i < parts.length; i++) {
+						if (i % 2 != 0) {
+							x[countX] = Double.parseDouble(parts[i]);
+							countX++;
+						} else {
+							y[countY] = Double.parseDouble(parts[i]);
+							countY++;
+						}
+					}
+
+				}
+
+				if (parts[0].equals("veht")) {
+					vehT = new double[parts.length - 1];
+					for (int i = 1; i < parts.length; i++) {
+						vehT[i - 1] = Integer.parseInt(parts[i]);
+
+					}
+				}
+
+				if (parts[0].equals("vehc")) {
+					vehC = new double[parts.length - 1];
+					for (int i = 1; i < parts.length; i++) {
+						vehC[i - 1] = Double.parseDouble(parts[i]);
+					}
+				}
+
+				if (parts[0].equals("vcost")) {
+					vCost = new double[parts.length - 1];
+					for (int i = 1; i < parts.length; i++) {
+						vCost[i - 1] = Double.parseDouble(parts[i]);
+
+					}
+				}
+
+				if (parts[0].equals("fcost")) {
+					fCost = new double[parts.length - 1];
+					for (int i = 1; i < parts.length; i++) {
+						fCost[i - 1] = Double.parseDouble(parts[i]);
+
+					}
+				}
+				if (parts[0].equals("vhours")) {
+					vHours = new double[parts.length-1];
+					for (int i = 1; i < parts.length; i++) {
+						vHours[i-1] = Double.parseDouble(parts[i]);
+					}
+				}
+
+			}
+
+		} catch (NumberFormatException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+		return new ArraysTxt(nodes, di, pi, x, y, vehT, vehC, vCost, fCost, vHours);
+
+	}
+
+}
